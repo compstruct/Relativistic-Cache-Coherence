@@ -1,0 +1,320 @@
+dram.cc:	bkgrp = (bankgrp_t**) calloc(sizeof(bankgrp_t*), m_config->nbkgrp);
+dram.cc:	bkgrp[0] = (bankgrp_t*) calloc(sizeof(bank_t), m_config->nbkgrp);
+dram.cc:	for (unsigned i=1; i<m_config->nbkgrp; i++) {
+dram.cc:	for (unsigned i=0; i<m_config->nbkgrp; i++) {
+dram.cc:   bk = (bank_t**) calloc(sizeof(bank_t*),m_config->nbk);
+dram.cc:   bk[0] = (bank_t*) calloc(sizeof(bank_t),m_config->nbk);
+dram.cc:   for (unsigned i=1;i<m_config->nbk;i++) 
+dram.cc:   for (unsigned i=0;i<m_config->nbk;i++) {
+dram.cc:      bk[i]->bkgrpindex = i/(m_config->nbk/m_config->nbkgrp);
+dram.cc:   rwq = new fifo_pipeline<dram_req_t>("rwq",m_config->CL,m_config->CL+1);
+dram.cc:   returnq = new fifo_pipeline<mem_fetch>("dramreturnq",0,m_config->gpgpu_dram_sched_queue_size); 
+dram.cc:   if ( m_config->scheduler_type == DRAM_FRFCFS )
+dram.cc:   if( m_config->gpgpu_dram_sched_queue_size == 0 ) 
+dram.cc:   if( m_config->scheduler_type == DRAM_FRFCFS ) 
+dram.cc:       return (m_frfcfs_scheduler->num_pending() >= m_config->gpgpu_dram_sched_queue_size) or (mrqq->full());
+dram.cc:   if (m_config->scheduler_type == DRAM_FRFCFS ) {
+dram.cc:   return m_config->gpgpu_dram_sched_queue_size; 
+dram.cc:   if ( m_config->scheduler_type == DRAM_FRFCFS ) {
+dram.cc:           cmd->dqbytes += m_config->dram_atom_size; 
+dram.cc:   switch (m_config->scheduler_type) {
+dram.cc:   if ( m_config->scheduler_type == DRAM_FRFCFS ) {
+dram.cc:   unsigned k=m_config->nbk;
+dram.cc:   for (unsigned i=0;i<m_config->nbk;i++) {
+dram.cc:      unsigned j = (i + prio) % m_config->nbk;
+dram.cc:	  unsigned grp = j>>m_config->bk_tag_length;
+dram.cc:               rwq->set_min_length(m_config->CL);
+dram.cc:            bk[j]->mrq->txbytes += m_config->dram_atom_size; 
+dram.cc:            CCDc = m_config->tCCD;
+dram.cc:            bkgrp[grp]->CCDLc = m_config->tCCDL;
+dram.cc:            RTWc = m_config->tRTW;
+dram.cc:            bk[j]->RTPc = m_config->BL/m_config->data_command_freq_ratio;
+dram.cc:            bkgrp[grp]->RTPLc = m_config->tRTPL;
+dram.cc:            bwutil += m_config->BL/m_config->data_command_freq_ratio;
+dram.cc:            bwutil_partial += m_config->BL/m_config->data_command_freq_ratio;
+dram.cc:                   bk[j]->mrq->col + bk[j]->mrq->txbytes - m_config->dram_atom_size);
+dram.cc:               rwq->set_min_length(m_config->WL);
+dram.cc:            bk[j]->mrq->txbytes += m_config->dram_atom_size; 
+dram.cc:            CCDc = m_config->tCCD;
+dram.cc:            bkgrp[grp]->CCDLc = m_config->tCCDL;
+dram.cc:            WTRc = m_config->tWTR; 
+dram.cc:            bk[j]->WTPc = m_config->tWTP; 
+dram.cc:            bwutil += m_config->BL/m_config->data_command_freq_ratio;
+dram.cc:            bwutil_partial += m_config->BL/m_config->data_command_freq_ratio;
+dram.cc:                   bk[j]->mrq->col + bk[j]->mrq->txbytes - m_config->dram_atom_size);
+dram.cc:            RRDc = m_config->tRRD;
+dram.cc:            bk[j]->RCDc = m_config->tRCD;
+dram.cc:            bk[j]->RCDWRc = m_config->tRCDWR;
+dram.cc:            bk[j]->RASc = m_config->tRAS;
+dram.cc:            bk[j]->RCc = m_config->tRC;
+dram.cc:            prio = (j + 1) % m_config->nbk;
+dram.cc:            bk[j]->RPc = m_config->tRP;
+dram.cc:            prio = (j + 1) % m_config->nbk;
+dram.cc:   for (unsigned j=0;j<m_config->nbk;j++) {
+dram.cc:   for (unsigned j=0; j<m_config->nbkgrp; j++) {
+dram.cc:           id, m_config->nbk, m_config->busW, m_config->BL, m_config->CL );
+dram.cc:           m_config->tCCD, m_config->tRRD, m_config->tRCD, m_config->tRAS, m_config->tRP, m_config->tRC );
+dram.cc:   for (i=0;i<m_config->nbk;i++) {
+dram.cc:   for (unsigned i=0;i<m_config->nbk;i++) {
+dram.cc:   for (unsigned j = 0; j < m_config->nbk; j++) {
+dram_sched.cc:   m_queue = new std::list<dram_req_t*>[m_config->nbk];
+dram_sched.cc:   m_bins = new std::map<unsigned,std::list<std::list<dram_req_t*>::iterator> >[ m_config->nbk ];
+dram_sched.cc:   m_last_row = new std::list<std::list<dram_req_t*>::iterator>*[ m_config->nbk ];
+dram_sched.cc:   curr_row_service_time = new unsigned[m_config->nbk];
+dram_sched.cc:   row_service_timestamp = new unsigned[m_config->nbk];
+dram_sched.cc:   for ( unsigned i=0; i < m_config->nbk; i++ ) {
+dram_sched.cc:   for ( unsigned b=0; b < m_config->nbk; b++ ) {
+dram_sched.cc:   while ( !mrqq->empty() && (!m_config->gpgpu_dram_sched_queue_size || sched->num_pending() < m_config->gpgpu_dram_sched_queue_size)) {
+dram_sched.cc:   for ( i=0; i < m_config->nbk; i++ ) {
+dram_sched.cc:      unsigned b = (i+prio)%m_config->nbk;
+dram_sched.cc:            prio = (prio+1)%m_config->nbk;
+dram_sched.cc:            if (m_config->gpgpu_memlatency_stat) {
+gpu-sim.cc:   if ( cta_size > m_shader_config->n_thread_per_shader ) {
+gpu-sim.cc:             m_shader_config->n_thread_per_shader );
+gpu-sim.cc:    m_cluster = new simt_core_cluster*[m_shader_config->n_simt_clusters];
+gpu-sim.cc:    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
+gpu-sim.cc:    m_memory_partition_unit = new memory_partition_unit*[m_memory_config->m_n_mem];
+gpu-sim.cc:    for (unsigned i=0;i<m_memory_config->m_n_mem;i++) 
+gpu-sim.cc:    icnt_init(m_shader_config->n_simt_clusters,m_memory_config->m_n_mem);
+gpu-sim.cc:   return m_shader_config->gpgpu_shmem_size;
+gpu-sim.cc:   return m_shader_config->gpgpu_shader_registers;
+gpu-sim.cc:   return m_shader_config->warp_size;
+gpu-sim.cc:   return m_shader_config->model;
+gpu-sim.cc:    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
+gpu-sim.cc:    for (unsigned i=0;i<m_memory_config->m_n_mem;i++) 
+gpu-sim.cc:    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
+gpu-sim.cc:        create_thread_CFlogger( m_config.num_shader(), m_shader_config->n_thread_per_shader, 0, m_config.gpgpu_cflog_interval );
+gpu-sim.cc:       insn_warp_occ_create( m_config.num_shader(), m_shader_config->warp_size );
+gpu-sim.cc:       shader_warp_occ_create( m_config.num_shader(), m_shader_config->warp_size, m_config.gpgpu_cflog_interval);
+gpu-sim.cc:       shader_mem_acc_create( m_config.num_shader(), m_memory_config->m_n_mem, 4, m_config.gpgpu_cflog_interval);
+gpu-sim.cc:    if (m_memory_config->use_ruby == true) {
+gpu-sim.cc:      for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) {
+gpu-sim.cc:             num_cores+=m_shader_config->n_simt_cores_per_cluster;
+gpu-sim.cc:      for (unsigned i=0;i<m_memory_config->m_n_mem;i++) {
+gpu-sim.cc:   m_memory_stats->memlatstat_print(m_memory_config->m_n_mem,m_memory_config->nbk);
+gpu-sim.cc:   for (unsigned i=0;i<m_memory_config->m_n_mem;i++) 
+gpu-sim.cc:   if (!m_memory_config->m_L2_config.disabled() && m_memory_config->m_L2_config.get_num_lines())
+gpu-sim.cc:   return m_shader_config->n_thread_per_shader; 
+gpu-sim.cc:    if (cta_size%m_config->warp_size)
+gpu-sim.cc:      padded_cta_size = ((cta_size/m_config->warp_size)+1)*(m_config->warp_size);
+gpu-sim.cc:        unsigned warp_id = i/m_config->warp_size;
+gpu-sim.cc:        nthreads_in_block += ptx_sim_init_thread(kernel,&m_thread[i],m_sid,i,cta_size-(i-start_thread),m_config->n_thread_per_shader,this,free_cta_hw_id,warp_id,m_cluster->get_gpu());
+gpu-sim.cc:    assert( nthreads_in_block > 0 && nthreads_in_block <= m_config->n_thread_per_shader); // should be at least one, but less than max
+gpu-sim.cc:    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) {
+gpu-sim.cc:        unsigned idx = (i + last_issued + 1) % m_shader_config->n_simt_clusters;
+gpu-sim.cc:      for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
+gpu-sim.cc:        for (unsigned i=0;i<m_memory_config->m_n_mem;i++) {
+gpu-sim.cc:                if ( ::icnt_has_buffer( m_shader_config->mem2device(i), response_size ) ) {
+gpu-sim.cc:                    ::icnt_push( m_shader_config->mem2device(i), mf->get_tpc(), mf, response_size );
+gpu-sim.cc:      for (unsigned i=0;i<m_memory_config->m_n_mem;i++)  
+gpu-sim.cc:      for (unsigned i=0;i<m_memory_config->m_n_mem;i++) {
+gpu-sim.cc:              mem_fetch* mf = (mem_fetch*) icnt_pop( m_shader_config->mem2device(i) );
+gpu-sim.cc:      for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) {
+gpu-sim.cc:      for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) {
+gpu-sim.cc:         for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) {
+gpu-sim.cc:         if (all_threads_complete && !m_memory_config->m_L2_config.disabled() ) {
+gpu-sim.cc:            if (m_memory_config->m_L2_config.get_num_lines()) {
+gpu-sim.cc:               for (unsigned i=0;i<m_memory_config->m_n_mem;i++) {
+gpu-sim.cc:               for (unsigned i=0;i<m_memory_config->m_n_mem;i++) 
+gpu-sim.cc:   for (unsigned w=0; w < m_config->max_warps_per_shader; w++ ) 
+gpu-sim.cc:   for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) {
+gpu-sim.cc:      if(mask&1) m_cluster[m_shader_config->sid_to_cluster(i)]->display_pipeline(i,stdout,1,mask & 0x2E);
+gpu-sim.cc:      for (unsigned i=0;i<m_memory_config->m_n_mem;i++) {
+l2cache.cc:    if(!m_config->m_L2_config.disabled())
+l2cache.cc:       m_L2cache = new l2_cache(L2c_name,m_config->m_L2_config,-1,-1,m_L2interface,m_mf_allocator,IN_PARTITION_L2_MISS_QUEUE, &m_L2_stats);
+l2cache.cc:    sscanf(m_config->gpgpu_L2_queue_config,"%u:%u:%u:%u", &icnt_L2,&L2_dram,&dram_L2,&L2_icnt );
+l2cache.cc:    if( !m_config->m_L2_config.disabled()) {
+l2cache.cc:        if ( !m_config->m_L2_config.disabled() && m_L2cache->waiting_for_fill(mf) ) {
+l2cache.cc:    if( !m_config->m_L2_config.disabled() )
+l2cache.cc:        if ( !m_config->m_L2_config.disabled() &&
+l2cache.cc:              ( (m_config->m_L2_texure_only && mf->istexture()) || (!m_config->m_L2_texure_only) )
+l2cache.cc:    if( !m_config->m_L2_config.disabled() )
+l2cache.cc:    if( !m_config->m_L2_config.disabled() )
+l2cache.cc:    for (i=0,j=0,k=0;i<m_memory_config->m_n_mem;i++)
+l2cache.cc:            r.ready_cycle = cycle + m_config->rop_latency;
+l2cache.cc:        d.ready_cycle = gpu_sim_cycle+gpu_tot_sim_cycle + m_config->dram_latency;
+mem_fetch.cc:   config->m_address_mapping.addrdec_tlx(access.get_addr(),&m_raw_addr);
+mem_fetch.cc:   m_partition_addr = config->m_address_mapping.partition_address(access.get_addr());
+mem_latency_stat.cc:   assert( mem_config->m_valid );
+mem_latency_stat.cc:   assert( shader_config->m_valid );
+mem_latency_stat.cc:   concurrent_row_access = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   num_activates = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   row_access = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   max_conc_access2samerow = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   max_servicetime2samerow = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   for (unsigned i=0;i<mem_config->m_n_mem ;i++ ) {
+mem_latency_stat.cc:      concurrent_row_access[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:      row_access[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:      num_activates[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:      max_conc_access2samerow[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:      max_servicetime2samerow[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:   max_warps = n_shader * (shader_config->n_thread_per_shader / shader_config->warp_size+1);
+mem_latency_stat.cc:   totalbankreads = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   totalbankwrites = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   totalbankaccesses = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:   mf_total_lat_table = (unsigned long long int **) calloc(mem_config->m_n_mem, sizeof(unsigned long long *));
+mem_latency_stat.cc:   mf_max_lat_table = (unsigned **) calloc(mem_config->m_n_mem, sizeof(unsigned *));
+mem_latency_stat.cc:   num_MCBs_accessed = (unsigned int*) calloc(mem_config->m_n_mem*mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:   if (mem_config->gpgpu_dram_sched_queue_size) {
+mem_latency_stat.cc:      position_of_mrq_chosen = (unsigned int*) calloc(mem_config->gpgpu_dram_sched_queue_size, sizeof(unsigned int));
+mem_latency_stat.cc:      bankreads[i] = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:      bankwrites[i] = (unsigned int**) calloc(mem_config->m_n_mem, sizeof(unsigned int*));
+mem_latency_stat.cc:      for (j=0;j<mem_config->m_n_mem ;j++ ) {
+mem_latency_stat.cc:         bankreads[i][j] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:         bankwrites[i][j] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:   for (i=0;i<mem_config->m_n_mem ;i++ ) {
+mem_latency_stat.cc:      totalbankreads[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:      totalbankwrites[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:      totalbankaccesses[i] = (unsigned int*) calloc(mem_config->nbk, sizeof(unsigned int));
+mem_latency_stat.cc:      mf_total_lat_table[i] = (unsigned long long int*) calloc(mem_config->nbk, sizeof(unsigned long long int));
+mem_latency_stat.cc:      mf_max_lat_table[i] = (unsigned *) calloc(mem_config->nbk, sizeof(unsigned));
+mem_latency_stat.cc:      mem_access_type_stats[i] = (unsigned **) calloc(mem_config->m_n_mem, sizeof(unsigned*));
+mem_latency_stat.cc:      for (j=0; (unsigned) j< mem_config->m_n_mem; j++) {
+mem_latency_stat.cc:         mem_access_type_stats[i][j] = (unsigned *) calloc((mem_config->nbk+1), sizeof(unsigned*));
+mem_latency_stat.cc:   L2_cbtoL2length = (unsigned int*) calloc(mem_config->m_n_mem, sizeof(unsigned int));
+mem_latency_stat.cc:   L2_cbtoL2writelength = (unsigned int*) calloc(mem_config->m_n_mem, sizeof(unsigned int));
+mem_latency_stat.cc:   L2_L2tocblength = (unsigned int*) calloc(mem_config->m_n_mem, sizeof(unsigned int));
+mem_latency_stat.cc:   L2_dramtoL2length = (unsigned int*) calloc(mem_config->m_n_mem, sizeof(unsigned int));
+mem_latency_stat.cc:   L2_dramtoL2writelength = (unsigned int*) calloc(mem_config->m_n_mem, sizeof(unsigned int));
+mem_latency_stat.cc:   L2_L2todramlength = (unsigned int*) calloc(mem_config->m_n_mem, sizeof(unsigned int));
+mem_latency_stat.cc:   if (m_memory_config->gpgpu_memlatency_stat) {
+mem_latency_stat.cc:   if (m_memory_config->gpgpu_memlatency_stat) {
+mem_latency_stat.cc:   if (m_memory_config->gpgpu_memlatency_stat) {
+mem_latency_stat.cc:   if (mf_num_lat_pw && m_memory_config->gpgpu_memlatency_stat) {
+mem_latency_stat.cc:   if (m_memory_config->gpgpu_memlatency_stat) {
+mem_latency_stat.cc:   if (m_memory_config->gpgpu_memlatency_stat & GPU_MEMLATSTAT_MC) {
+mem_latency_stat.cc:      if (!m_memory_config->gpgpu_dram_sched_queue_size)
+mem_latency_stat.cc:         j = m_memory_config->gpgpu_dram_sched_queue_size;
+shader.cc:   : m_barriers( config->max_warps_per_shader, config->max_cta_per_core ), 
+shader.cc:   unsigned warp_size=config->warp_size;
+shader.cc:      m_pipeline_reg.push_back(register_set(m_config->pipe_widths[j],pipeline_stage_name_decode[j]));
+shader.cc:   m_threadState = (thread_ctx_t*) calloc(sizeof(thread_ctx_t), config->n_thread_per_shader);
+shader.cc:   m_thread = (ptx_thread_info**) calloc(sizeof(ptx_thread_info*), config->n_thread_per_shader);
+shader.cc:   for (unsigned i = 0; i<config->n_thread_per_shader; i++) {
+shader.cc:    if ( m_config->gpgpu_perfect_mem ) {
+shader.cc:   m_L1I = new read_only_cache( name,m_config->m_L1I_config,m_sid,get_shader_instruction_cache_id(),m_icnt,IN_L1I_MISS_QUEUE, &m_L1I_stats);
+shader.cc:   m_warp.resize(m_config->max_warps_per_shader, shd_warp_t(this, warp_size));
+shader.cc:   initilizeSIMTStack(config->max_warps_per_shader,this->get_config()->warp_size);
+shader.cc:   m_scoreboard = new Scoreboard(m_sid, m_config->max_warps_per_shader);
+shader.cc:   std::string sched_config = m_config->gpgpu_scheduler_string;
+shader.cc:	   sscanf(m_config->gpgpu_scheduler_string, "tl:%d", &tlmaw);
+shader.cc:   for (int i = 0; i < m_config->gpgpu_num_sched_per_core; i++) {
+shader.cc:       schedulers[i%m_config->gpgpu_num_sched_per_core]->add_supervised_warp_id(i);
+shader.cc:   m_operand_collector.add_cu_set(SP_CUS, m_config->gpgpu_operand_collector_num_units_sp, m_config->gpgpu_operand_collector_num_out_ports_sp);
+shader.cc:   m_operand_collector.add_cu_set(SFU_CUS, m_config->gpgpu_operand_collector_num_units_sfu, m_config->gpgpu_operand_collector_num_out_ports_sfu);
+shader.cc:   m_operand_collector.add_cu_set(MEM_CUS, m_config->gpgpu_operand_collector_num_units_mem, m_config->gpgpu_operand_collector_num_out_ports_mem);
+shader.cc:   m_operand_collector.add_cu_set(GEN_CUS, m_config->gpgpu_operand_collector_num_units_gen, m_config->gpgpu_operand_collector_num_out_ports_gen);
+shader.cc:   for (unsigned i = 0; i < m_config->gpgpu_operand_collector_num_in_ports_sp; i++) {
+shader.cc:   for (unsigned i = 0; i < m_config->gpgpu_operand_collector_num_in_ports_sfu; i++) {
+shader.cc:   for (unsigned i = 0; i < m_config->gpgpu_operand_collector_num_in_ports_mem; i++) {
+shader.cc:   for (unsigned i = 0; i < m_config->gpgpu_operand_collector_num_in_ports_gen; i++) {
+shader.cc:   m_operand_collector.init( m_config->gpgpu_num_reg_banks, this );
+shader.cc:   m_num_function_units = m_config->gpgpu_num_sp_units + m_config->gpgpu_num_sfu_units + 1; // sp_unit, sfu, ldst_unit
+shader.cc:   for (int k = 0; k < m_config->gpgpu_num_sp_units; k++) {
+shader.cc:   for (int k = 0; k < m_config->gpgpu_num_sfu_units; k++) {
+shader.cc:   num_result_bus = config->pipe_widths[EX_WB];
+shader.cc:   for (unsigned i = start_thread / m_config->warp_size; i < end_thread / m_config->warp_size; ++i) {
+shader.cc:    if (m_config->model == POST_DOMINATOR) {
+shader.cc:        unsigned start_warp = start_thread / m_config->warp_size;
+shader.cc:        unsigned end_warp = end_thread / m_config->warp_size + ((end_thread % m_config->warp_size)? 1 : 0);
+shader.cc:            for (unsigned t = 0; t < m_config->warp_size; t++) {
+shader.cc:                unsigned hwtid = i * m_config->warp_size + t;
+shader.cc:    for(unsigned i=0; i < m_config->num_shader(); i++) {
+shader.cc:   for (unsigned i = 3; i < m_config->warp_size + 3; i++) 
+shader.cc:    unsigned int cf = (m_config->gpgpu_warpdistro_shader==-1)?m_config->num_shader():1;
+shader.cc:    for (unsigned i=0; i<m_config->warp_size+3; i++) {
+shader.cc:          if ( ((i-3) % (m_config->warp_size/8)) == ((m_config->warp_size/8)-1) ) {
+shader.cc:   for (unsigned i=0;i<m_config->num_shader();i++) 
+shader.cc:   for (unsigned i=0;i<m_config->num_shader();i++) 
+shader.cc:   for (unsigned i=0;i<m_config->num_shader();i++) 
+shader.cc:        for( unsigned i=0; i < m_config->max_warps_per_shader; i++ ) {
+shader.cc:            unsigned warp_id = (m_last_warp_fetched+1+i) % m_config->max_warps_per_shader;
+shader.cc:                for( unsigned t=0; t<m_config->warp_size;t++) {
+shader.cc:                    unsigned tid=warp_id*m_config->warp_size+t;
+shader.cc:                unsigned offset_in_block = pc & (m_config->m_L1I_config.get_line_sz()-1);
+shader.cc:                if( (offset_in_block+nbytes) > m_config->m_L1I_config.get_line_sz() )
+shader.cc:                    nbytes = (m_config->m_L1I_config.get_line_sz()-offset_in_block);
+shader.cc:    execute_warp_inst_t(inst, m_config->warp_size);
+shader.cc:    updateSIMTStack(warp_id,m_config->warp_size,*pipe_reg);
+shader.cc:        unsigned max_issue = m_shader->m_config->gpgpu_max_insn_issue_per_warp;
+shader.cc:		unsigned max_issue = m_shader->m_config->gpgpu_max_insn_issue_per_warp;
+shader.cc:   if (m_config->gpgpu_local_mem_map) {
+shader.cc:      thread_base = 4*(m_config->n_thread_per_shader * m_sid + tid);
+shader.cc:      max_concurrent_threads = num_shader * m_config->n_thread_per_shader;
+shader.cc:   if ( CACHE_GLOBAL == inst.cache_op || (m_L1D == NULL) || m_memory_config->use_ruby ) {
+shader.cc:       if (m_memory_config->use_ruby == false) {
+shader.cc:                  if(!m_memory_config->m_ruby_config.m_no_write_acks)
+shader.cc:    if (m_memory_config->use_ruby == false) {
+shader.cc:        if(m_memory_config->m_ruby_config.m_send_memfence_to_protocol) {
+shader.cc:    return m_response_fifo.size() >= m_config->ldst_unit_response_queue_size;
+shader.cc:    : pipelined_simd_unit(result_port,config,config->max_sfu_latency) 
+shader.cc:    : pipelined_simd_unit(result_port,config,config->max_sp_latency) 
+shader.cc:    m_L1T = new tex_cache(L1T_name,m_config->m_L1T_config,m_sid,get_shader_texture_cache_id(),icnt,IN_L1T_MISS_QUEUE,IN_SHADER_L1T_ROB,&m_L1T_stats);
+shader.cc:    m_L1C = new read_only_cache(L1C_name,m_config->m_L1C_config,m_sid,get_shader_constant_cache_id(),icnt,IN_L1C_MISS_QUEUE,&m_L1C_stats);
+shader.cc:    if( !m_config->m_L1D_config.disabled() ) 
+shader.cc:        m_L1D = new l1_cache(L1D_name,m_config->m_L1D_config,m_sid,get_shader_normal_cache_id(),m_icnt,m_mf_allocator,IN_L1D_MISS_QUEUE,&m_L1D_stats);
+shader.cc:                  assert(!m_memory_config->m_ruby_config.m_no_write_acks);   // if a write, acks should be enabled
+shader.cc:              if(m_config->gmem_skip_L1D && mf->get_inst().space.is_global()) {
+shader.cc:              } else if(m_memory_config->m_ruby_config.m_writes_stall_at_mshr == false) {
+shader.cc:    return m_config->mem_warp_parts; 
+shader.cc:    	   if( mf->get_type() == WRITE_ACK || ( m_config->gpgpu_perfect_mem && mf->get_is_write() )) {
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) 
+shader.cc:   for ( unsigned i = 0; i < m_shader_config->n_simt_clusters; ++i ) {
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) 
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) 
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) 
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) 
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) {
+shader.cc:      if (i%m_shader_config->warp_size == (unsigned)(m_shader_config->warp_size-1)) {
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) {
+shader.cc:      if (i%m_shader_config->warp_size == (unsigned)(m_shader_config->warp_size-1)) {
+shader.cc:   for (unsigned i=0; i<m_shader_config->n_thread_per_shader; i++) {
+shader.cc:      if (i%m_shader_config->warp_size == (unsigned)(m_shader_config->warp_size-1)) {
+shader.cc:    for (unsigned j=0; j<m_config->warp_size; j++)
+shader.cc:    if ( (mask & 4) && m_config->model == POST_DOMINATOR ) {
+shader.cc:       unsigned n = m_config->n_thread_per_shader / m_config->warp_size;
+shader.cc:          for (unsigned j=0; j<m_config->warp_size; j++ ) {
+shader.cc:             unsigned tid = i*m_config->warp_size + j;
+shader.cc:    if( !m_config->m_L1D_config.disabled() )
+shader.cc:    if(m_memory_config->use_ruby) {
+shader.cc:   for( unsigned i=0; i<m_config->max_warps_per_shader; i++) {
+shader.cc:   if( m_active_threads.count() <= 2*m_config->warp_size ) {
+shader.cc:           unsigned warp_id = tid/m_config->warp_size;
+shader.cc:   assert(warp_id < m_config->max_warps_per_shader);
+shader.cc:    kernel_max_cta_per_shader = m_config->max_cta(kernel);
+shader.cc:    kernel_padded_threads_per_cta = (gpu_cta_size%m_config->warp_size) ? 
+shader.cc:        m_config->warp_size*((gpu_cta_size/m_config->warp_size)+1) : 
+shader.cc:	assert( mf->get_type() == WRITE_ACK  || ( m_config->gpgpu_perfect_mem && mf->get_is_write() ) );
+shader.cc:    m_cta_issue_next_core=m_config->n_simt_cores_per_cluster-1; // this causes first launch to use hw cta 0
+shader.cc:    m_core = new shader_core_ctx*[ config->n_simt_cores_per_cluster ];
+shader.cc:    for( unsigned i=0; i < config->n_simt_cores_per_cluster; i++ ) {
+shader.cc:        unsigned sid = m_config->cid_to_sid(i,m_cluster_id);
+shader.cc:    if (m_config->simt_core_sim_order == 1) {
+shader.cc:    for( unsigned i=0; i < m_config->n_simt_cores_per_cluster; i++ ) 
+shader.cc:        m_core[i]->reinit(0,m_config->n_thread_per_shader,true);
+shader.cc:    return m_config->n_simt_cores_per_cluster * m_config->max_cta(kernel);
+shader.cc:    for( unsigned i=0; i < m_config->n_simt_cores_per_cluster; i++ ) 
+shader.cc:    for( unsigned i=0; i < m_config->n_simt_cores_per_cluster; i++ ) {
+shader.cc:        unsigned sid=m_config->cid_to_sid(i,m_cluster_id);
+shader.cc:    for( unsigned i=0; i < m_config->n_simt_cores_per_cluster; i++ ) 
+shader.cc:    for( unsigned i=0; i < m_config->n_simt_cores_per_cluster; i++ ) {
+shader.cc:        unsigned core = (i+m_cta_issue_next_core+1)%m_config->n_simt_cores_per_cluster;
+shader.cc:        if( kernel && !kernel->no_more_ctas_to_run() && (m_core[core]->get_n_active_cta() < m_config->max_cta(*kernel)) ) {
+shader.cc:    for( unsigned i=0; i < m_config->n_simt_cores_per_cluster; i++ ) 
+shader.cc:      ::icnt_push(m_cluster_id, m_config->mem2device(destination), (void*)mf, mf->get_ctrl_size() );
+shader.cc:      ::icnt_push(m_cluster_id, m_config->mem2device(destination), (void*)mf, mf->size());
+shader.cc:        unsigned cid = m_config->sid_to_cid(mf->get_sid());
+shader.cc:    if( m_response_fifo.size() < m_config->n_simt_ejection_buffer_size ) {
+shader.cc:        //m_memory_stats->memlatstat_read_done(mf,m_shader_config->max_warps_per_shader);
+shader.cc:    m_core[m_config->sid_to_cid(sid)]->display_pipeline(fout,print_mem,mask);
+shader.cc:   for ( unsigned i = 0; i < m_config->n_simt_cores_per_cluster; ++i ) {
+shader.cc:            num_addrs = translate_local_memaddr(inst.get_addr(t), tid, m_config->n_simt_clusters*m_config->n_simt_cores_per_cluster,
+shader.cc:    for (unsigned t = 0; t < m_config->warp_size; t++) {
+shader.cc:            int tid = warp_id * m_config->warp_size + t; 
+shader.h:        m_num_sim_insn = (unsigned*) calloc(config->num_shader(),sizeof(unsigned));
+shader.h:        m_num_sim_winsn = (unsigned*) calloc(config->num_shader(),sizeof(unsigned));
+shader.h:        m_n_diverge = (unsigned*) calloc(config->num_shader(),sizeof(unsigned));
+shader.h:        shader_cycle_distro = (unsigned*) calloc(config->warp_size+3, sizeof(unsigned));
+shader.h:        last_shader_cycle_distro = (unsigned*) calloc(m_config->warp_size+3, sizeof(unsigned));
+shader.h:        return ( m_response_fifo.size() >= m_config->n_simt_ejection_buffer_size );
+visualizer.cc:   for (unsigned i=0;i<m_memory_config->m_n_mem;i++) 

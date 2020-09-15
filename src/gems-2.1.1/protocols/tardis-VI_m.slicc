@@ -1,0 +1,6 @@
+../protocols/tardis-VI-msg.sm
+../protocols/tardis-VI-L2cache.sm
+../protocols/tardis-VI-L1cache.sm
+../protocols/tardis-VI_m-mem.sm
+../protocols/standard_CMP-protocol.sm
+

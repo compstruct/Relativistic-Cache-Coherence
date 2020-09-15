@@ -1,0 +1,6 @@
+../protocols/non_coherent_nwa-msg.sm
+../protocols/non_coherent_nwa-L2cache.sm
+../protocols/non_coherent_nwa-L1cache.sm
+../protocols/non_coherent_nwa_g-mem.sm
+../protocols/standard_CMP-protocol.sm
+

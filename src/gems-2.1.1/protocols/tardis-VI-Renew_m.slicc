@@ -1,0 +1,6 @@
+../protocols/tardis-VI-Renew-msg.sm
+../protocols/tardis-VI-Renew-L2cache.sm
+../protocols/tardis-VI-Renew-L1cache.sm
+../protocols/tardis-VI-Renew_m-mem.sm
+../protocols/standard_CMP-protocol.sm
+

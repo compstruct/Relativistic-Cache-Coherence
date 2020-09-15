@@ -1,0 +1,6 @@
+../protocols/ideal_MESI-msg.sm
+../protocols/ideal_MESI-L2cache.sm
+../protocols/ideal_MESI-L1cache.sm
+../protocols/ideal_MESI_g-mem.sm
+../protocols/standard_CMP-protocol.sm
+

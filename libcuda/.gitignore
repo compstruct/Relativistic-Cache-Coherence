@@ -1,0 +1,7 @@
+Makefile.makedepend
+Makefile.makedepend.bak
+cuobjdump_lexer.c
+cuobjdump_parser.c
+cuobjdump_parser.h
+cuobjdump_parser.output
+

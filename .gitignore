@@ -1,0 +1,12 @@
+tags
+TAGS
+build/
+lib/
+bin/sim/
+libopencl/bin
+out
+out2
+err
+ut
+ut2
+*~

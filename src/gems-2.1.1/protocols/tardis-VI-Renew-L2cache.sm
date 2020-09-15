@@ -1,0 +1,880 @@
+
+/*
+    Copyright (C) 1999-2005 by Mark D. Hill and David A. Wood for the
+    Wisconsin Multifacet Project.  Contact: gems@cs.wisc.edu
+    http://www.cs.wisc.edu/gems/
+
+    --------------------------------------------------------------------
+
+    This file is part of the SLICC (Specification Language for
+    Implementing Cache Coherence), a component of the Multifacet GEMS
+    (General Execution-driven Multiprocessor Simulator) software
+    toolset originally developed at the University of Wisconsin-Madison.
+
+    SLICC was originally developed by Milo Martin with substantial
+    contributions from Daniel Sorin.
+
+    Substantial further development of Multifacet GEMS at the
+    University of Wisconsin was performed by Alaa Alameldeen, Brad
+    Beckmann, Jayaram Bobba, Ross Dickson, Dan Gibson, Pacia Harper,
+    Derek Hower, Milo Martin, Michael Marty, Carl Mauer, Michelle Moravan,
+    Kevin Moore, Manoj Plakal, Daniel Sorin, Haris Volos, Min Xu, and Luke Yen.
+
+    --------------------------------------------------------------------
+
+    If your use of this software contributes to a published paper, we
+    request that you (1) cite our summary paper that appears on our
+    website (http://www.cs.wisc.edu/gems/) and (2) e-mail a citation
+    for your published paper to gems@cs.wisc.edu.
+
+    If you redistribute derivatives of this software, we request that
+    you notify us and either (1) ask people to register with us at our
+    website (http://www.cs.wisc.edu/gems/) or (2) collect registration
+    information and periodically send it to us.
+
+    --------------------------------------------------------------------
+
+    Multifacet GEMS is free software; you can redistribute it and/or
+    modify it under the terms of version 2 of the GNU General Public
+    License as published by the Free Software Foundation.
+
+    Multifacet GEMS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with the Multifacet GEMS; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+    02111-1307, USA
+
+    The GNU General Public License is contained in the file LICENSE.
+
+### END HEADER ###
+ */
+/*
+ * $Id: MSI_MOSI_CMP_directory-L2cache.sm 1.12 05/01/19 15:55:40-06:00 beckmann@s0-28.cs.wisc.edu $
+ *
+ */
+
+machine(L2Cache, "Tardis VIP L2 Cache CMP, add Renew message") {
+
+    // L2 BANK QUEUES
+    // From local bank of L2 cache TO the network
+    MessageBuffer responseFromL2Cache, network="To", virtual_network="1", ordered="true";  // this L2 bank -> a local L1
+
+    // FROM the network to this local bank of L2 cache
+    MessageBuffer L1RequestToL2Cache, network="From", virtual_network="0", ordered="true";  // a local L1 -> this L2 bank
+
+    // STATES
+    enumeration(State, desc="L2 Cache states", default="L2Cache_State_NP") {
+        // Base states
+        NP,   desc="Not present in cache";
+        V,    desc="L2 cache entry valid";
+
+        // Transient States for fetching data from memory
+        IV,   desc="L2 idle, got L1 Write, issue memory fetch, have not seen response yet";
+        IAV,  desc="L2 idle, got Atomic, issue memory fetch, have not seen response yet";
+    }
+
+    // EVENTS
+    enumeration(Event, desc="L2 Cache events") {
+        // L2 events
+
+        // events initiated by the local L1s
+        L1_GETS,                 desc="a L1D GETS request for a block maped to us";
+        L1_GETS_Renew,           desc="a L1D GETS request for a block maped to us, but the L1 block does not change, just send renew message back to update rts";
+
+        // Store from L1
+        L1_Write,                desc="data from L1 due to a write miss in L1";
+
+        // Atomic from L1
+        L2_Atomic,               desc="Atomic request and data from L1";
+
+        // events initiated by this L2
+        L2_Replacement,          desc="L2 Replacement", format="!r";
+        L2_Replacement_clean,    desc="L2 Replacement, but data is clean", format="!r";
+
+        // events from memory controller
+        Mem_Data_PR,             desc="data from memory, only pending read";
+        Mem_Data_PW,             desc="data from memory, only pending write";
+        Mem_Data_PRW,            desc="data from memory, both pending read and pending write";
+    }
+
+    // Interface to off-chip GDDR memory
+    external_type(GpusimDramInterface, inport="yes", outport="yes") {
+    }
+
+    // CacheEntry
+    structure(Entry, desc="...", interface="AbstractCacheEntry") {
+        State CacheState,            desc="cache state";
+        //NetDest Sharers,           desc="tracks the L1 shares on-chip";
+        //MachineID Exclusive,       desc="Exclusive holder of block";
+        DataBlock DataBlk,           desc="data for the block";
+        bool Dirty, default="false", desc="data is dirty";
+        Time rts,                    desc="maximum rts of the cache block in any of the L1s";
+        Time wts,                    desc="latest timestamp of L1_Write or L2_Atomic";
+    }
+
+    // TBE fields
+    structure(TBE, desc="...") {
+        Address Address,                           desc="Physical address for this TBE";
+        State TBEState,                            desc="Transient state";
+        DataBlock DataBlk,                         desc="Buffer for the data block";
+        bool Dirty,            default="false",    desc="Data is Dirty";
+
+        NetDest L1_GetS_IDs,                       desc="Set of the internal processors that want the block in shared state";
+        MachineID L1_WBAck_ID,                     desc="ID of the L1 cache to forward the block to once we get a response";
+
+        bool isPrefetch,                           desc="Set if this was caused by a prefetch";
+        MemorySpaceType Space,                     desc="Memory space of request (GLOBAL, LOCAL)";
+        Time deltaRequested,                       desc="Delta time requested";
+
+        int RequestSize,                           desc="Size of request data";
+        Time max_read_pts,                         desc="Max pts of all read requests";
+        Time max_write_pts,                        desc="Max pts of all write requests";
+        bool pending_read,     default="false",    desc="whether we have pending read";
+        bool pending_write,    default="false",    desc="whether we have pending write";
+        uint64 memfetch,                           desc="Memfetch of requestor thread";
+        // only loads use mfset because store requests can never be merged
+        MemfetchSet mfset,                         desc="Set of memfetchs received so far in this TBE";
+    }
+
+    external_type(CacheMemory) {
+        Time getMts();
+        void setMts(Time);
+        bool cacheAvail(Address);
+        Address cacheProbe(Address);
+        void allocate(Address);
+        void deallocate(Address);
+        Entry lookup(Address);
+        void changePermission(Address, AccessPermission);
+        bool isTagPresent(Address);
+        void setMRU(Address);
+    }
+
+    external_type(TBETable) {
+        TBE lookup(Address);
+        void allocate(Address);
+        void deallocate(Address);
+        bool isPresent(Address);
+    }
+
+    // Objects
+    GpusimDramInterface GpusimDramBuffer, abstract_chip_ptr="true", constructor_hack="i";
+
+    TBETable L2_TBEs, template_hack="<L2Cache_TBE>";
+
+    CacheMemory L2cacheMemory, template_hack="<L2Cache_Entry>", constructor_hack='L2_CACHE_NUM_SETS_BITS,L2_CACHE_ASSOC,MachineType_L2Cache,int_to_string(i)';
+
+    // inclusive cache, returns L2 entries only
+    Entry getL2CacheEntry(Address addr), return_by_ref="yes" {
+        return L2cacheMemory[addr];
+    }
+
+    void changeL2Permission(Address addr, AccessPermission permission) {
+        if (L2cacheMemory.isTagPresent(addr)) {
+            return L2cacheMemory.changePermission(addr, permission);
+        }
+    }
+
+    string getCoherenceRequestTypeStr(CoherenceRequestType type) {
+        return CoherenceRequestType_to_string(type);
+    }
+
+    bool isL2CacheTagPresent(Address addr) {
+        return (L2cacheMemory.isTagPresent(addr));
+    }
+
+    State getState(Address addr) {
+        if(L2_TBEs.isPresent(addr)) {
+            return L2_TBEs[addr].TBEState;
+        } else if (isL2CacheTagPresent(addr)) {
+            return getL2CacheEntry(addr).CacheState;
+        }
+        return State:NP;
+    }
+
+    string getStateStr(Address addr) {
+        return L2Cache_State_to_string(getState(addr));
+    }
+
+    // when is this called
+    void setState(Address addr, State state) {
+
+        // MUST CHANGE
+        if (L2_TBEs.isPresent(addr)) {
+            L2_TBEs[addr].TBEState := state;
+        }
+
+        if (isL2CacheTagPresent(addr)) {
+            getL2CacheEntry(addr).CacheState := state;
+
+            // Set permission
+            if (state == State:V) {
+                changeL2Permission(addr, AccessPermission:Read_Write);
+            } else {
+                changeL2Permission(addr, AccessPermission:Busy);
+            }
+        }
+    }
+
+    Event L1Cache_request_type_to_event(CoherenceRequestType type, Address addr, Time rts, bool InL1) {
+        if(type == CoherenceRequestType:GETS) {
+            if (L2cacheMemory.isTagPresent(addr) && (getL2CacheEntry(addr).CacheState == State:V) && (InL1 == true) && (time_to_int(rts) > time_to_int(getL2CacheEntry(addr).wts))) {
+                return Event:L1_GETS_Renew;
+            }
+            else {
+                return Event:L1_GETS;
+            }
+        } else if(type == CoherenceRequestType:DATA) {
+            return Event:L1_Write;
+        } else if (type == CoherenceRequestType:DATA_ATOMIC) {
+           return Event:L2_Atomic;
+        } else {
+            DEBUG_EXPR(addr);
+            DEBUG_EXPR(type);
+            error("Invalid L1 forwarded request type");
+        }
+    }
+
+    void addSharer(Address addr, MachineID requestor) {
+        assert(false);
+    }
+
+    bool isOneSharerLeft(Address addr, MachineID requestor) {
+        assert(false);
+        return false;
+    }
+
+    bool isSharer(Address addr, MachineID requestor) {
+        assert(false);
+        return false;
+    }
+
+    // ** OUT_PORTS **
+
+    out_port(memQueue_out, MemoryMsg, GpusimDramBuffer);
+    out_port(responseIntraChipL2Network_out, ResponseMsg, responseFromL2Cache);
+
+    // ** IN_PORTS **
+    
+    // off-chip memory request/response is done
+    in_port(memQueue_in, MemoryMsg, GpusimDramBuffer) {
+        if (memQueue_in.isReady()) {
+            peek(memQueue_in, MemoryMsg) {
+                if (in_msg.Type == MemoryRequestType:MEMORY_READ) {
+                    assert(L2_TBEs[in_msg.Address].pending_read || L2_TBEs[in_msg.Address].pending_write == true);
+                    if (L2_TBEs[in_msg.Address].pending_read && L2_TBEs[in_msg.Address].pending_write == true) {
+                        trigger(Event:Mem_Data_PRW, in_msg.Address);  
+                    }
+                    else if (L2_TBEs[in_msg.Address].pending_read == true) {
+                        trigger(Event:Mem_Data_PR, in_msg.Address);  
+                    }
+                    else {
+                        trigger(Event:Mem_Data_PW, in_msg.Address);  
+                    }
+                } else if (in_msg.Type == MemoryRequestType:MEMORY_WB) {
+                    // Pop DRAM Ack without event
+                    memQueue_in.dequeue();
+                } else {
+                    DEBUG_EXPR(in_msg.Type);
+                    error("Invalid message");
+                }
+            }
+        }
+    }
+
+    // L1 Request
+    in_port(L1RequestIntraChipL2Network_in, RequestMsg, L1RequestToL2Cache) {
+        if(L1RequestIntraChipL2Network_in.isReady()) {
+            peek(L1RequestIntraChipL2Network_in,  RequestMsg) {
+
+                assert(machineIDToMachineType(in_msg.Requestor) == MachineType:L1Cache);
+                assert(in_msg.Destination.isElement(machineID));
+
+                if (L2cacheMemory.isTagPresent(in_msg.Address)) {
+                    // The L2 contains the block, so proceeded with handling the request
+                    trigger(L1Cache_request_type_to_event(in_msg.Type, in_msg.Address, in_msg.rts, in_msg.InL1), in_msg.Address);
+                } else {
+                    if (L2cacheMemory.cacheAvail(in_msg.Address)) {
+                        // L2 does't have the line, but we have space for it in the L2
+                        trigger(L1Cache_request_type_to_event(in_msg.Type, in_msg.Address, in_msg.rts, in_msg.InL1), in_msg.Address);
+                    } else {
+                        // No room in the L2, so we need to make room before handling the request
+                        if (L2cacheMemory[ L2cacheMemory.cacheProbe(in_msg.Address) ].Dirty ) {
+                            trigger(Event:L2_Replacement, L2cacheMemory.cacheProbe(in_msg.Address));
+                        } else {
+                            trigger(Event:L2_Replacement_clean, L2cacheMemory.cacheProbe(in_msg.Address));
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+
+    // ACTIONS
+
+    action(a_issueFetchToMemory, "a", desc="fetch data from memory") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            enqueue(memQueue_out, MemoryMsg, latency="L2_to_MEM_MSG_LATENCY") {
+                out_msg.Address := address;
+                out_msg.Type := MemoryRequestType:MEMORY_READ;
+                out_msg.Sender := machineID;
+                out_msg.OriginalRequestorMachId := machineID;
+                out_msg.MessageSize := MessageSizeType:Control;
+            }
+        }
+    }
+
+    action(a_issueFetchToMemoryForStore, "as", desc="fetch data from memory for store") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            enqueue(memQueue_out, MemoryMsg, latency="L2_to_MEM_MSG_LATENCY") {
+                out_msg.Address := address;
+                out_msg.Type := MemoryRequestType:MEMORY_READ;
+                out_msg.Sender := machineID;
+                out_msg.OriginalRequestorMachId := machineID;
+                out_msg.MessageSize := MessageSizeType:Control;
+            }
+        }
+    }
+
+    action(c_exclusiveReplacement, "c", desc="Send data to memory") {
+        enqueue(memQueue_out, MemoryMsg, latency="L2_to_MEM_DATA_LATENCY") {
+            out_msg.Address := address;
+            out_msg.Type := MemoryRequestType:MEMORY_WB;
+            out_msg.Sender := machineID;
+            out_msg.OriginalRequestorMachId := machineID;
+            out_msg.DataBlk := getL2CacheEntry(address).DataBlk;
+            out_msg.MessageSize := MessageSizeType:Response_Data;
+        }
+    }
+
+    action(ds_sendDataToRequestor, "ds", desc="Send data+timestamp from cache to requestor in request queue") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            assert(time_to_int(getL2CacheEntry(address).rts) >= time_to_int(in_msg.pts));
+            enqueue(responseIntraChipL2Network_out, ResponseMsg, latency="L2_to_L1_DATA_LATENCY") {
+                out_msg.Address := address;
+                out_msg.Type := CoherenceResponseType:DATA;
+                out_msg.Sender := machineID;
+                out_msg.Destination.add(in_msg.Requestor);
+                out_msg.DataBlk := getL2CacheEntry(address).DataBlk;
+                out_msg.Dirty := getL2CacheEntry(address).Dirty;
+                out_msg.MessageSize := IntToMessageSizeType(in_msg.RequestSize);
+                out_msg.AckCount := 0;
+                out_msg.Space := in_msg.Space;
+                out_msg.RequestSize := in_msg.RequestSize;
+                out_msg.rts := getL2CacheEntry(address).rts;
+                out_msg.wts := getL2CacheEntry(address).wts;
+                out_msg.mfset.insert(in_msg.Requestor, in_msg.memfetch);
+            }
+        }
+    }
+
+    action(dsr_sendRenewToRequestor, "dsr", desc="Send renew+timestamp from cache to requestor in request queue") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            assert(time_to_int(getL2CacheEntry(address).rts) >= time_to_int(in_msg.pts));
+            enqueue(responseIntraChipL2Network_out, ResponseMsg, latency="L2_to_L1_MSG_LATENCY") {
+                out_msg.Address := address;
+                out_msg.Type := CoherenceResponseType:RENEW;
+                out_msg.Sender := machineID;
+                out_msg.Destination.add(in_msg.Requestor);
+                out_msg.MessageSize := MessageSizeType:Response_Control;
+                out_msg.Space := in_msg.Space;
+                out_msg.RequestSize := in_msg.RequestSize;
+                out_msg.rts := getL2CacheEntry(address).rts;
+                out_msg.wts := getL2CacheEntry(address).wts;
+                out_msg.mfset.insert(in_msg.Requestor, in_msg.memfetch);
+            }
+        }
+    }
+
+    action(dst_sendDataToGetSRequestors, "dst", desc="Send data+timestamp from cache to all GetS IDs from TBE") {
+        assert(L2_TBEs[address].L1_GetS_IDs.count() > 0);
+        assert(time_to_int(getL2CacheEntry(address).rts) >= time_to_int(L2_TBEs[address].max_read_pts));
+        enqueue(responseIntraChipL2Network_out, ResponseMsg, latency="L2_to_L1_DATA_LATENCY") {
+            out_msg.Address := address;
+            out_msg.Type := CoherenceResponseType:DATA;
+            out_msg.Sender := machineID;
+            out_msg.Destination := L2_TBEs[address].L1_GetS_IDs;  // internal nodes
+            out_msg.DataBlk := getL2CacheEntry(address).DataBlk;
+            out_msg.Dirty := getL2CacheEntry(address).Dirty;
+            out_msg.MessageSize := IntToMessageSizeType(L2_TBEs[address].RequestSize);
+            out_msg.Space := L2_TBEs[address].Space;
+            out_msg.RequestSize := L2_TBEs[address].RequestSize;
+            assert(isL2CacheTagPresent(address));        // Note: Sending rts and wts from cache, so it must exist!
+            out_msg.rts := getL2CacheEntry(address).rts;
+            out_msg.wts := getL2CacheEntry(address).wts;
+            out_msg.mfset := L2_TBEs[address].mfset;
+        }
+    }
+
+    action(ds_sendAtomicDataGlobalToRequestor, "ds_a", desc="Send atomic data from cache to requestor in response queue") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            enqueue(responseIntraChipL2Network_out, ResponseMsg, latency="L2_to_L1_DATA_LATENCY") {
+                out_msg.Address := address;
+                out_msg.Type := CoherenceResponseType:DATA_ATOMIC;
+                out_msg.Sender := machineID;
+                out_msg.Destination.add(in_msg.Requestor);
+                out_msg.DataBlk := getL2CacheEntry(address).DataBlk;
+                out_msg.Dirty := getL2CacheEntry(address).Dirty;
+                out_msg.MessageSize := IntToMessageSizeType(in_msg.RequestSize);
+                out_msg.AckCount := 0;
+                out_msg.Space := in_msg.Space;
+                out_msg.RequestSize := in_msg.RequestSize;
+                out_msg.wts := getL2CacheEntry(address).wts;
+                out_msg.memfetch := in_msg.memfetch;
+            }
+        }
+    }
+
+    action(dst_sendAtomicDataToGetSRequestors, "dst_a", desc="Send atomic data + timestamp from cache to requestor from TBE") {
+        enqueue(responseIntraChipL2Network_out, ResponseMsg, latency="L2_to_L1_DATA_LATENCY") {
+            out_msg.Address := address;
+            out_msg.Type := CoherenceResponseType:DATA_ATOMIC;
+            out_msg.Sender := machineID;
+            out_msg.Destination.add(L2_TBEs[address].L1_WBAck_ID);
+            out_msg.DataBlk := getL2CacheEntry(address).DataBlk;
+            out_msg.Dirty := getL2CacheEntry(address).Dirty;
+            out_msg.MessageSize := IntToMessageSizeType(L2_TBEs[address].RequestSize);
+            out_msg.Space := L2_TBEs[address].Space;
+            out_msg.RequestSize := L2_TBEs[address].RequestSize;
+            assert(isL2CacheTagPresent(address));        // Note: Sending wts from cache, so it must exist!
+            out_msg.wts := getL2CacheEntry(address).wts;
+            out_msg.memfetch := L2_TBEs[address].memfetch;
+        }
+    }
+
+    action(wa_sendAckToRequestor, "wa", desc="Send Ack (non-global) from cache to requestor") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            enqueue(responseIntraChipL2Network_out, ResponseMsg, latency="L2_to_L1_MSG_LATENCY") {
+                out_msg.Address := address;
+                out_msg.Type := CoherenceResponseType:ACK;
+                out_msg.Sender := machineID;
+                out_msg.Destination.add(in_msg.Requestor);
+                out_msg.MessageSize := MessageSizeType:Response_Control;
+                out_msg.Space := in_msg.Space;
+                out_msg.RequestSize := in_msg.RequestSize;
+                out_msg.wts := getL2CacheEntry(address).wts;
+                out_msg.memfetch := in_msg.memfetch;
+            }
+        }
+    }
+
+    action(wat_sendAckToRequestorFromTBE, "wat", desc="Send ack (non-global) from cache to requestor from TBE") {
+        enqueue(responseIntraChipL2Network_out, ResponseMsg, latency="L2_to_L1_MSG_LATENCY") {
+            out_msg.Address := address;
+            out_msg.Type := CoherenceResponseType:ACK;
+            out_msg.Sender := machineID;
+            out_msg.Destination.add(L2_TBEs[address].L1_WBAck_ID);
+            out_msg.MessageSize := MessageSizeType:Response_Control;
+            out_msg.Space := L2_TBEs[address].Space;
+            out_msg.RequestSize := L2_TBEs[address].RequestSize;
+            assert(isL2CacheTagPresent(address));        // Note: Sending wts from cache, so it must exist!
+            out_msg.wts := getTimeMax(L2_TBEs[address].max_write_pts, L2cacheMemory.getMts());
+            out_msg.memfetch := L2_TBEs[address].memfetch;
+        }
+    }
+
+    // OTHER ACTIONS
+    action(i_allocateTBE, "i", desc="Allocate TBE from L1 request queue") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            check_allocate(L2_TBEs);
+            L2_TBEs.allocate(address);
+            L2_TBEs[address].L1_GetS_IDs.clear();
+            L2_TBEs[address].DataBlk := getL2CacheEntry(address).DataBlk;
+            L2_TBEs[address].Dirty := getL2CacheEntry(address).Dirty;
+            L2_TBEs[address].Space := in_msg.Space;
+            L2_TBEs[address].RequestSize := in_msg.RequestSize;
+            L2_TBEs[address].deltaRequested := in_msg.deltaRequested;
+            L2_TBEs[address].memfetch := in_msg.memfetch;
+            L2_TBEs[address].max_read_pts := in_msg.pts;
+            L2_TBEs[address].max_write_pts := int_to_time(0);
+            L2_TBEs[address].pending_read := false;
+            L2_TBEs[address].pending_write := false;  
+        }
+    }
+
+    action(il_allocateTBE, "il", desc="Allocate TBE from L1 response queue") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            check_allocate(L2_TBEs);
+            L2_TBEs.allocate(address);
+            L2_TBEs[address].L1_GetS_IDs.clear();
+            L2_TBEs[address].DataBlk := getL2CacheEntry(address).DataBlk;
+            L2_TBEs[address].Dirty := getL2CacheEntry(address).Dirty;
+            L2_TBEs[address].RequestSize := in_msg.RequestSize;
+            L2_TBEs[address].Space := in_msg.Space;
+            L2_TBEs[address].memfetch := in_msg.memfetch;
+            L2_TBEs[address].max_read_pts := int_to_time(0);
+            L2_TBEs[address].max_write_pts := in_msg.pts;
+            L2_TBEs[address].pending_read := false;
+            L2_TBEs[address].pending_write := false;  
+        }
+    }
+
+    action(s_deallocateTBE, "s", desc="Deallocate external TBE") {
+        L2_TBEs.deallocate(address);
+    }
+
+    action(jj_popL1RequestQueue, "\j", desc="Pop incoming L1 request queue") {
+        peek(L1RequestIntraChipL2Network_in,  RequestMsg) {
+            if(in_msg.Type == CoherenceRequestType:GETS) {
+                profileBandwidth("L1_MSG", in_msg.MessageSize);
+                if (in_msg.ExpiredInL1 == true) {
+                    profileExpiredBandwidth("EXPIRED_READ", in_msg.MessageSize);
+                    if (in_msg.TouchedInL1 == true) {
+                        profileExpiredBandwidth("EXPIRED_TOUCHED_READ", in_msg.MessageSize);
+                        if (in_msg.expired_by_ownself == true) {
+                            profileExpiredBandwidth("TOUCHED_EXPIRED_BY_OWNSELF", in_msg.MessageSize);
+                        }
+                        else {
+                            profileExpiredBandwidth("TOUCHED_EXPIRED_BY_OTHERS", in_msg.MessageSize);
+                        }
+                    }
+                    else {
+                        profileExpiredBandwidth("EXPIRED_UNTOUCHED_READ", in_msg.MessageSize);
+                        if (in_msg.expired_by_ownself == true) {
+                            profileExpiredBandwidth("UNTOUCHED_EXPIRED_BY_OWNSELF", in_msg.MessageSize);
+                        }
+                        else {
+                            profileExpiredBandwidth("UNTOUCHED_EXPIRED_BY_OTHERS", in_msg.MessageSize);
+                        }
+                    }
+                    if (in_msg.expired_by_ownself == true) {
+                        profileExpiredBandwidth("OWNSELF_EXPIRED", in_msg.MessageSize);
+                    }
+                    else {
+                        profileExpiredBandwidth("OTHERS_EXPIRED", in_msg.MessageSize);
+                    }
+                }
+            } else if (in_msg.Type == CoherenceRequestType:DATA) {
+                profileBandwidth("L1_DATA_TO_L2", in_msg.MessageSize);
+            } else if (in_msg.Type == CoherenceRequestType:DATA_ATOMIC) {
+                profileBandwidth("L1_ATOMIC_TO_L2", in_msg.MessageSize);
+            } else {
+                error("Invalid CacheResponseType");
+            }
+        }
+        L1RequestIntraChipL2Network_in.dequeue();
+    }
+
+
+    action(o_popIncomingResponseQueue, "o", desc="Pop Incoming Response queue") {
+        memQueue_in.dequeue();
+    }
+
+    action(m_writeDataToCache, "m", desc="Write data from mem response queue to cache") {
+        peek(memQueue_in, MemoryMsg) {
+            getL2CacheEntry(address).DataBlk := in_msg.DataBlk;
+            getL2CacheEntry(address).Dirty := false;
+            getL2CacheEntry(address).rts := L2cacheMemory.getMts();
+            getL2CacheEntry(address).wts := L2cacheMemory.getMts();
+        }
+    }
+
+    action(mr_writeDataToCacheFromRequest, "mr", desc="Write data from L1 response queue to cache") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            assert(in_msg.Dirty == true);
+            getL2CacheEntry(address).DataBlk := in_msg.DataBlk;
+            getL2CacheEntry(address).Dirty := in_msg.Dirty;
+        }
+    }
+
+    action(mtr_writeDataToTBEFromRequest, "mtr", desc="Write data from L1 response queue to TBE") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            assert(in_msg.Dirty == true);
+            L2_TBEs[address].DataBlk := in_msg.DataBlk;
+            L2_TBEs[address].Dirty := in_msg.Dirty;
+        }
+    }
+
+    action(mt_writeDataToCacheFromTBE, "mt", desc="Write data from TBE to cache (for WB stores)") {
+        assert(L2_TBEs[address].Dirty == true);
+        getL2CacheEntry(address).DataBlk := L2_TBEs[address].DataBlk;
+        getL2CacheEntry(address).Dirty := L2_TBEs[address].Dirty;
+        getL2CacheEntry(address).rts := L2cacheMemory.getMts();
+        getL2CacheEntry(address).wts := getTimeMax(L2_TBEs[address].max_write_pts, L2cacheMemory.getMts());
+    }
+
+    action(ss_recordGetSL1ID, "\s", desc="Record L1 GetS for load response") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            assert(L2_TBEs[address].Space == in_msg.Space);
+            L2_TBEs[address].L1_GetS_IDs.add(in_msg.Requestor);
+            L2_TBEs[address].RequestSize := getIntMax(L2_TBEs[address].RequestSize, in_msg.RequestSize);   // set size to max of all merged GetS
+            L2_TBEs[address].mfset.insert(in_msg.Requestor, in_msg.memfetch);
+        }
+    }
+
+    action(set_setMRU, "\set", desc="set the MRU entry") {
+        L2cacheMemory.setMRU(address);
+    }
+
+    action(qq_allocateL2CacheBlock, "\q", desc="Set L2 cache tag equal to tag of block B.") {
+        if (L2cacheMemory.isTagPresent(address) == false) {
+            L2cacheMemory.allocate(address);
+        }
+    }
+
+    action(setmts_setMts, "\setmts", desc="set the L2 mts") {
+        L2cacheMemory.setMts(getTimeMax(L2cacheMemory.getMts(), getTimeMax(getL2CacheEntry(address).rts, getL2CacheEntry(address).wts)));
+    }
+
+    action(tr_updateL2BlockRts, "tr", desc="Extend the rts of the L2 block according to request") {
+        peek(L1RequestIntraChipL2Network_in,  RequestMsg) {
+            getL2CacheEntry(address).rts := getTimeMax(getTimePlusTime(in_msg.pts, in_msg.deltaRequested), getTimeMax(getTimePlusTime(getL2CacheEntry(address).wts, in_msg.deltaRequested), getL2CacheEntry(address).rts));
+        }
+    }
+
+    action(tw_updateL2BlockWts, "tw", desc="Extend the wts of the L2 block for Shared or Modified") {
+        peek(L1RequestIntraChipL2Network_in,  RequestMsg) {
+            getL2CacheEntry(address).wts := getTimeMax(getTimeMax(in_msg.pts, getL2CacheEntry(address).wts), getTimePlusInt(getL2CacheEntry(address).rts, 1));
+        }
+    }
+
+    action(trt_updateL2BlockRts_fromTBE, "trt", desc="Extend the lifetime of the L2 block according to request in TBE") {
+        getL2CacheEntry(address).rts := getTimeMax(getTimePlusTime(L2_TBEs[address].max_read_pts, L2_TBEs[address].deltaRequested), getTimeMax(getTimePlusTime(getL2CacheEntry(address).wts, L2_TBEs[address].deltaRequested), getL2CacheEntry(address).rts));
+    }
+
+    action(tmrt_updateMaxReadPtsInTBE, "tmrt", desc="Extend the max_read_pts according to request in TBE") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            L2_TBEs[address].max_read_pts := getTimeMax(in_msg.pts, L2_TBEs[address].max_read_pts);
+        }
+    }
+
+    action(tmwt_updateMaxWritePtsInTBE, "tmwt", desc="Extend the max_write_pts according to request in TBE") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            L2_TBEs[address].max_write_pts := getTimeMax(in_msg.pts, L2_TBEs[address].max_write_pts);
+        }
+    }
+
+    action(d_markBlockDirty, "d", desc="Mark block as dirty") {
+        getL2CacheEntry(address).Dirty := true;
+    }
+
+    action(dpr_markPendingRead, "dpr", desc="Mark TBE pending read as true") {
+        L2_TBEs[address].pending_read := true;
+    }
+    
+    action(dpw_markPendingWrite, "dpw", desc="Mark TBE pending write as true") {
+        L2_TBEs[address].pending_write := true;
+    }
+    
+    action(cpr_clearPendingRead, "cpr", desc="Clear TBE pending read as false") {
+        L2_TBEs[address].pending_read := false;
+    }
+    
+    action(cpw_clearPendingWrite, "cpw", desc="Clear TBE pending write as false") {
+        L2_TBEs[address].pending_write := false;
+    }
+    
+    action(rr_deallocateL2CacheBlock, "\r", desc="Deallocate L2 cache block.  Sets the cache to not present, allowing a replacement in parallel with a fetch.") {
+        L2cacheMemory.deallocate(address);
+    }
+
+    action(xx_recordGetXL1ID, "\x", desc="Record L1 WB for store response") {
+        DEBUG_EXPR(address);
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            L2_TBEs[address].L1_WBAck_ID := in_msg.Requestor;
+            L2_TBEs[address].memfetch := in_msg.memfetch;
+        }
+        DEBUG_EXPR(address);
+    }
+
+    action(zz_recycleL1RequestQueue, "zz", desc="recycle L1 request queue") {
+        L1RequestIntraChipL2Network_in.recycle();
+    }
+
+    action(zc_recycleL1ResponseNetwork, "zc", desc="recycle L1 response queue") {
+       L1RequestIntraChipL2Network_in.recycle();
+    }
+
+    action(z_stall, "z", desc="stall - i.e. do nothing") {
+    }
+
+    action(pM_profileRequestMiss, "prM", desc="Profile a demand miss for request message") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            profile_L2Cache_request_g(convertRequestToGenericType(in_msg.Type), in_msg.MessageSize, id, true);   // miss
+        }
+    }
+
+    action(pH_profileRequestHit, "prH", desc="Profile a demand hit for request message") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            profile_L2Cache_request_g(convertRequestToGenericType(in_msg.Type), in_msg.MessageSize, id, false);  // hit
+        }
+    }
+
+
+    action(pM_profileResponseMiss, "pwM", desc="Profile a demand miss for response message") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            profile_L2Cache_request_g(convertRequestToGenericType(in_msg.Type), in_msg.MessageSize, id, true);   // miss
+        }
+    }
+
+    action(pH_profileResponseHit, "pwH", desc="Profile a demand hit for response message") {
+        peek(L1RequestIntraChipL2Network_in, RequestMsg) {
+            profile_L2Cache_request_g(convertRequestToGenericType(in_msg.Type), in_msg.MessageSize, id, false);  // hit
+        }
+    }
+
+
+    //*****************************************************
+    // TRANSITIONS
+    //*****************************************************
+
+    // Transitions from NP (Not Present)
+    transition(NP, L1_GETS,  IV) {
+        pM_profileRequestMiss;
+        qq_allocateL2CacheBlock;
+        i_allocateTBE;
+        ss_recordGetSL1ID;
+        dpr_markPendingRead;
+        a_issueFetchToMemory;
+        jj_popL1RequestQueue;
+    }
+
+    transition(NP, L1_Write,  IV) {
+        pM_profileResponseMiss;
+        qq_allocateL2CacheBlock;
+        d_markBlockDirty;
+        il_allocateTBE;
+        xx_recordGetXL1ID;
+        dpw_markPendingWrite;
+        mtr_writeDataToTBEFromRequest;
+        a_issueFetchToMemoryForStore;
+        wat_sendAckToRequestorFromTBE;
+        jj_popL1RequestQueue;
+    }
+
+    transition(NP, L2_Atomic,  IAV) {
+        pM_profileResponseMiss;
+        qq_allocateL2CacheBlock;
+        d_markBlockDirty;
+        il_allocateTBE;
+        xx_recordGetXL1ID;
+        dpw_markPendingWrite;
+        mtr_writeDataToTBEFromRequest;
+        a_issueFetchToMemoryForStore;
+        jj_popL1RequestQueue;
+    }
+
+    // transitions from IAV
+    transition(IAV, {L1_GETS, L1_Write, L2_Atomic, L2_Replacement, L2_Replacement_clean}) {
+        z_stall;
+    }
+
+    transition(IAV, Mem_Data_PW, V) {
+        m_writeDataToCache;
+        mt_writeDataToCacheFromTBE;
+        dst_sendAtomicDataToGetSRequestors;
+        //cpw_clearPendingWrite;
+        s_deallocateTBE;
+        o_popIncomingResponseQueue;
+    }
+    
+    // transitions from IV
+    transition(IV, L1_GETS) {
+        pH_profileRequestHit;
+        ss_recordGetSL1ID;
+        dpr_markPendingRead;
+        tmrt_updateMaxReadPtsInTBE;
+        jj_popL1RequestQueue;
+    }
+
+    transition(IV, L1_Write) {
+        pH_profileResponseHit;
+        xx_recordGetXL1ID;
+        dpw_markPendingWrite;
+        tmwt_updateMaxWritePtsInTBE;
+        mtr_writeDataToTBEFromRequest;
+        wat_sendAckToRequestorFromTBE;
+        jj_popL1RequestQueue;
+    }
+
+    transition(IV, Mem_Data_PR, V) {
+        m_writeDataToCache;
+        trt_updateL2BlockRts_fromTBE;
+        dst_sendDataToGetSRequestors;
+        //cpr_clearPendingRead;
+        s_deallocateTBE;
+        o_popIncomingResponseQueue;
+    }
+
+    transition(IV, Mem_Data_PW, V) {
+        m_writeDataToCache;
+        mt_writeDataToCacheFromTBE;
+        //cpw_clearPendingWrite;
+        s_deallocateTBE;
+        o_popIncomingResponseQueue;
+    }
+
+    transition(IV, Mem_Data_PRW, V) {
+        m_writeDataToCache;
+        mt_writeDataToCacheFromTBE;
+        trt_updateL2BlockRts_fromTBE;
+        dst_sendDataToGetSRequestors;
+        //cpr_clearPendingRead;
+        //cpw_clearPendingWrite;
+        s_deallocateTBE;
+        o_popIncomingResponseQueue;
+    }
+
+    transition(IV, L2_Atomic) {
+        //zc_recycleL1ResponseNetwork;
+        z_stall;
+    }
+
+    transition(IV, {L2_Replacement, L2_Replacement_clean}) {
+        z_stall;
+    }
+
+    // transitions from V
+    transition(V, L1_GETS) {
+        pH_profileRequestHit;
+        tr_updateL2BlockRts;
+        ds_sendDataToRequestor;
+        set_setMRU;
+        jj_popL1RequestQueue;
+    }
+
+    transition(V, L1_GETS_Renew) {
+        pH_profileRequestHit;
+        tr_updateL2BlockRts;
+        dsr_sendRenewToRequestor;
+        set_setMRU;
+        jj_popL1RequestQueue;
+    }
+
+    transition(V, L1_Write) {
+        pH_profileResponseHit;
+        d_markBlockDirty;
+        tw_updateL2BlockWts;
+        wa_sendAckToRequestor;
+        mr_writeDataToCacheFromRequest;
+        set_setMRU;
+        jj_popL1RequestQueue;
+    }
+
+    transition(V, L2_Atomic) {
+        pH_profileResponseHit;
+        d_markBlockDirty;
+        tw_updateL2BlockWts;
+        ds_sendAtomicDataGlobalToRequestor,
+        mr_writeDataToCacheFromRequest;
+        set_setMRU;
+        jj_popL1RequestQueue;
+    }
+
+    transition(V, {L2_Replacement_clean}, NP) {
+        setmts_setMts;
+        rr_deallocateL2CacheBlock;
+    }
+
+    transition(V, {L2_Replacement}, NP) {
+        setmts_setMts;
+        c_exclusiveReplacement;
+        rr_deallocateL2CacheBlock;
+    }
+
+}
+

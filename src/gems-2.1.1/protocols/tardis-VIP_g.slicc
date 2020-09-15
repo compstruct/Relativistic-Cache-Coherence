@@ -1,0 +1,6 @@
+../protocols/tardis-VIP-msg.sm
+../protocols/tardis-VIP-L2cache.sm
+../protocols/tardis-VIP-L1cache.sm
+../protocols/tardis-VIP_g-mem.sm
+../protocols/standard_CMP-protocol.sm
+
